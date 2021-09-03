@@ -98,16 +98,17 @@ class SupConLoss(nn.Module):
         return loss
 
 
-class IMixSupConLoss(nn.Module):
+class VICandSupConLoss(nn.Module):
     def __init__(
         self, temperature=0.07, contrast_mode='all', base_temperature=0.07
     ):
-        super(IMixSupConLoss, self).__init__()
+        super(VICandSupConLoss, self).__init__()
         self.temperature = temperature
         self.contrast_mode = contrast_mode
         self.base_temperature = base_temperature
+        self.vic = VICLoss()
 
-    def forward(self, features, labels=None, mask=None):
+    def forward(self, features, labels=None, mask=None, print_c=False):
         device = (
             torch.device('cuda') if features.is_cuda else torch.device('cpu')
         )
@@ -127,31 +128,46 @@ class IMixSupConLoss(nn.Module):
             torch.arange(3).view(-1, 1).to(device), labels
         ).float()
         num_idx = label_mask.sum(1).int()
-        label_idx = label_mask.nonzero()[:, 1].split(num_idx.tolist())
-        y1_list = []
+        label_idxs = label_mask.nonzero()[:, 1].split(num_idx.tolist())
+        label_idx = torch.cat(label_idxs, dim=0)
+        labels = labels[label_idx].view(-1, 1)
+        contrast_feature = features[label_idx].reshape(
+            (batch_size * n_views, -1)
+        )
 
-        for l in label_idx:
+        y_list = []
+
+        for l in label_idxs:
             z1 = features[l]
             z1 = z1.reshape((len(l) * n_views, -1))
             z2_idx = torch.randperm(z1.size(0))
             z2 = z1[z2_idx]
-            lam = (
-                torch.distributions.beta.Beta(1, 1)
-                .sample((z1.size(0), 1))
-                .to(device)
-            )
-            z1_interpolate = lam * z1 + (1 - lam) * z2
-            y1_list.append(z1_interpolate)
+            y_list.append(z2)
 
-        contrast_feature = torch.cat(y1_list, dim=0)
-        labels = torch.zeros(len(label_idx[0]))
-        labels = torch.cat((labels, torch.ones(len(label_idx[1]))), dim=0)
-        labels = (
-            torch.cat((labels, torch.ones(len(label_idx[2])) + 1), dim=0)
-            .contiguous()
-            .view(-1, 1)
+        contrast_feature_2 = torch.cat(y_list, dim=0)
+        lam = (
+            torch.distributions.beta.Beta(1, 1)
+            .sample((contrast_feature_2.size(0), 1))
             .to(device)
         )
+        z1_interpolate = (
+            lam * contrast_feature + (1 - lam) * contrast_feature_2
+        )
+        z2_interpolate = (
+            lam * contrast_feature_2 + (1 - lam) * contrast_feature
+        )
+
+        # contrast_feature = torch.cat(y1_list, dim=0)
+        # labels = torch.zeros(len(label_idx[0]))
+        # labels = torch.cat((labels, torch.ones(len(label_idx[1]))), dim=0)
+        # labels = (
+        #     torch.cat((labels, torch.ones(len(label_idx[2])) + 1), dim=0)
+        #     .contiguous()
+        #     .view(-1, 1)
+        #     .to(device)
+        # )
+        # loss1 = self.vic(contrast_feature, contrast_feature_2, print_c=print_c)
+        loss1 = self.vic(z1_interpolate, z2_interpolate, print_c=print_c)
         mask = torch.eq(labels, labels.T).float().to(device)  # be careful
         contrast_count = features.shape[1]
         if self.contrast_mode == 'one':
@@ -193,7 +209,7 @@ class IMixSupConLoss(nn.Module):
         loss = -(self.temperature / self.base_temperature) * mean_log_prob_pos
         loss = loss.view(anchor_count, batch_size).mean()
 
-        return loss
+        return 25 * loss + loss1
 
 
 class VICLoss(nn.Module):
@@ -274,8 +290,8 @@ class VICLoss(nn.Module):
         self: nn.Module,
         z1: torch.Tensor,
         z2: torch.Tensor,
-        sim_loss_weight: float = 50.0,
-        var_loss_weight: float = 50.0,
+        sim_loss_weight: float = 25.0,
+        var_loss_weight: float = 25.0,
         cov_loss_weight: float = 1.0,
     ) -> torch.Tensor:
         """Computes VICReg's loss given batch of projected features z1 from view 1 and
@@ -299,6 +315,7 @@ class VICLoss(nn.Module):
             + var_loss_weight * var_loss
             + cov_loss_weight * cov_loss
         )
+        # loss = var_loss_weight * var_loss + cov_loss_weight * cov_loss
         return loss, c
 
 
@@ -343,28 +360,43 @@ class VICSupConLoss(VICLoss):
         if len(features.shape) > 2:
             features = features.view(features.shape[0], features.shape[1], -1)
 
+        batch_size = features.shape[0]
+        n_views = features.shape[1]
+
         label_mask = torch.eq(
-            torch.arange(self.num_classes).view(-1, 1).to(device), labels
+            torch.arange(3).view(-1, 1).to(device), labels
         ).float()
         num_idx = label_mask.sum(1).int()
-        label_idx = label_mask.nonzero()[:, 1].split(num_idx.tolist())
+        label_idxs = label_mask.nonzero()[:, 1].split(num_idx.tolist())
+        label_idx = torch.cat(label_idxs, dim=0)
+        labels = labels[label_idx].view(-1, 1)
+        contrast_feature = features[label_idx].reshape(
+            (batch_size * n_views, -1)
+        )
 
-        loss = torch.zeros(1, device=device)
+        y_list = []
 
-        y1_list = []
-        y2_list = []
-
-        for l in label_idx:
+        for l in label_idxs:
             z1 = features[l]
+            z1 = z1.reshape((len(l) * n_views, -1))
             z2_idx = torch.randperm(z1.size(0))
             z2 = z1[z2_idx]
-            y1_list.append(z1)
-            y2_list.append(z2)
+            y_list.append(z2)
 
-        y1 = torch.cat(y1_list, dim=0)
-        y2 = torch.cat(y2_list, dim=0)
+        contrast_feature_2 = torch.cat(y_list, dim=0)
+        lam = (
+            torch.distributions.beta.Beta(1, 1)
+            .sample((contrast_feature_2.size(0), 1))
+            .to(device)
+        )
+        z1_interpolate = (
+            lam * contrast_feature + (1 - lam) * contrast_feature_2
+        )
+        z2_interpolate = (
+            lam * contrast_feature_2 + (1 - lam) * contrast_feature
+        )
+        loss, c = self.vicreg_loss_func(z1_interpolate, z2_interpolate)
 
-        loss, c = self.vicreg_loss_func(y1, y2)
         if print_c:
             print(c)
 

@@ -9,6 +9,65 @@ import copy
 import torch
 
 
+class TransLobEncoder(nn.Module):
+    def __init__(
+        self, extractor=None, pos_encoding=None, aggregator=None, norm=False
+    ):
+        super().__init__()
+        if extractor:
+            self.extractor = extractor
+        else:
+            self.extractor = FeatureExtractor(
+                [
+                    (14, 2, 1, 1),
+                    (14, 2, 1, 2),
+                    (14, 2, 1, 4),
+                    (14, 2, 1, 8),
+                    (14, 2, 1, 16),
+                ],
+                40,
+                0.1,
+                nn.ReLU(),
+            )
+        if pos_encoding:
+            self.pos_encoding = pos_encoding
+        else:
+            self.pos_encoding = PositionalEncodingLayer()
+        if aggregator:
+            self.aggregator = aggregator
+        else:
+            self.aggregator = TransformerAggregator(
+                d_model=64,
+                n_head=4,
+                n_encoder_layers=2,
+                dim_feedforward=256,
+                dropout=0.1,
+                activation='relu',
+                tr_weight_share=True,
+            )
+        self.norm = norm
+
+        self.fc = nn.Linear(15, 64)
+
+        self.layernorm = nn.LayerNorm([14, 100])
+        self.fc1 = nn.Linear(100 * 64, 128)
+
+    def forward(self, x):
+        x = self.extractor(x)
+        x = self.layernorm(x)
+        x = self.pos_encoding(x)
+        x = x.permute([0, 2, 1])
+        x = self.fc(x)
+        x = self.aggregator(x)
+        x = x.permute([0, 2, 1])
+        x = x.flatten(1)
+        x = self.fc1(x)
+        if self.norm:
+            x = F.normalize(x, dim=1)
+
+        return x
+
+
 class TransformerAggregator(Module):
     """
     Args:

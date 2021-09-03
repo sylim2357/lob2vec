@@ -1,6 +1,6 @@
 import numpy as np
 from datetime import datetime
-import tqdm
+from tqdm import tqdm
 import torch
 import math
 
@@ -14,15 +14,16 @@ def pretext_train_function(
     test_loader,
     make_batches=None,
 ):
-    if args['supervised']:
+    if 'sup' in args.loss:
         assert make_batches is None
 
-    train_losses = np.zeros(args['epochs'])
-    test_losses = np.zeros(args['epochs'])
+    device = torch.device(args.device)
+    train_losses = np.zeros(args.epochs)
+    test_losses = np.zeros(args.epochs)
     best_test_loss = np.inf
     best_test_epoch = 0
 
-    for it in tqdm(range(args['epochs'])):
+    for it in tqdm(range(args.epochs)):
 
         model.train()
         t0 = datetime.now()
@@ -35,27 +36,30 @@ def pretext_train_function(
                 optimizer,
                 train_loader,
                 idx,
-                args['epochs'],
+                args.epochs,
                 inp.size(0),
-                args['learning_rate_weights'],
-                args['learning_rate_biases'],
+                args.lr_weight,
+                args.lr_bias,
             )
 
             optimizer.zero_grad()
             x = inp.view(batch_size * n_views, *(inp.size()[2:]))
             z = model(x).reshape(batch_size, n_views, -1)
 
-            if args['supervised']:
+            if 'sup' in args.loss:
                 targets = targets.to(device, dtype=torch.int64)
                 assert z.size(0) == targets.size(0)
                 if idx % 100 == 0:
                     printbool = True
                 else:
                     printbool = False
-                # loss = criterion(features=z, labels=targets, print_c=printbool)
-                loss = criterion(features=z, labels=targets)
+                loss = criterion(features=z, labels=targets, print_c=printbool)
+                # loss = criterion(features=z, labels=targets)
 
             else:
+                assert (
+                    z.size(1) > 1
+                ), 'unsupervised setting should have more than 1 view'
                 z1, z2 = make_batches(z)
                 if idx % 100 == 0:
                     printbool = True
@@ -74,7 +78,7 @@ def pretext_train_function(
 
         model.eval()
         test_loss = []
-        for inputs, targets in test_loader:
+        for t_idx, (inputs, targets) in enumerate(test_loader):
             inp = inputs.to(device, dtype=torch.float)  # B x views x channels
             batch_size = inp.size(0)
             n_views = inp.size(1)
@@ -82,21 +86,22 @@ def pretext_train_function(
             x = inp.view(batch_size * n_views, *(inp.size()[2:]))
             z = model(x).reshape(batch_size, n_views, -1)
 
-            if args['supervised']:
+            if 'sup' in args.loss:
                 targets = targets.to(device, dtype=torch.int64)
                 assert z.size(0) == targets.size(0)
-                if idx % 100 == 0:
+                if t_idx % 100 == 0:
                     printbool = True
                     print('test!')
                 else:
                     printbool = False
-                # loss = criterion(features=z, labels=targets, print_c=printbool)
-                loss = criterion(features=z, labels=targets)
+                loss = criterion(features=z, labels=targets, print_c=printbool)
+                # loss = criterion(features=z, labels=targets)
 
             else:
                 z1, z2 = make_batches(z)
-                if idx % 100 == 0:
+                if t_idx % 100 == 0:
                     printbool = True
+                    print('test!')
                 else:
                     printbool = False
                 loss = criterion(z1, z2, print_c=printbool)
@@ -109,14 +114,14 @@ def pretext_train_function(
         test_losses[it] = test_loss
 
         if test_loss < best_test_loss:
-            torch.save(model, './best_val_translob_model_pytorch')
+            torch.save(model, args.model_path)
             best_test_loss = test_loss
             best_test_epoch = it
             print('model saved')
 
         dt = datetime.now() - t0
         print(
-            f'Epoch {it+1}/{args["epochs"]}, Train Loss: {train_loss:.4f}, \
+            f'Epoch {it+1}/{args.epochs}, Train Loss: {train_loss:.4f}, \
           Validation Loss: {test_loss:.4f}, Duration: {dt}, Best Val Epoch: {best_test_epoch}'
         )
 
@@ -145,3 +150,78 @@ def adjust_learning_rate(
         lr = base_lr * q + end_lr * (1 - q)
     optimizer.param_groups[0]['lr'] = lr * learning_rate_weights
     optimizer.param_groups[1]['lr'] = lr * learning_rate_biases
+
+
+def downstream_train_function(
+    args,
+    model,
+    criterion,
+    optimizer,
+    train_loader,
+    test_loader,
+):
+    device = torch.device(args.device)
+    train_losses = np.zeros(args.epochs)
+    test_losses = np.zeros(args.epochs)
+    best_test_loss = np.inf
+    best_test_epoch = 0
+
+    for it in tqdm(range(args.epochs)):
+
+        model.train()
+        t0 = datetime.now()
+        train_loss = []
+        for idx, (inputs, targets) in enumerate(train_loader):
+            inputs, targets = (
+                inputs.to(device, dtype=torch.float),
+                targets.to(device, dtype=torch.int64),
+            )
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            optimizer.step()
+            train_loss.append(loss.item())
+            if idx % 100 == 0:
+                print(f'{idx} update: {loss.item()}')
+        train_loss = np.mean(train_loss)  # a little misleading
+
+        model.eval()
+        test_loss = []
+        n_correct = 0.0
+        n_total = 0.0
+        for inputs, targets in test_loader:
+            inputs, targets = (
+                inputs.to(device, dtype=torch.float),
+                targets.to(device, dtype=torch.int64),
+            )
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
+
+            _, predictions = torch.max(outputs, 1)
+
+            n_correct += (predictions == targets).sum().item()
+            n_total += targets.shape[0]
+
+            test_loss.append(loss.item())
+
+        test_loss = np.mean(test_loss)
+        test_acc = n_correct / n_total
+        print(f"Test acc: {test_acc:.4f}")
+
+        train_losses[it] = train_loss
+        test_losses[it] = test_loss
+
+        if test_loss < best_test_loss:
+            # torch.save(model, './best_val_model_pytorch')
+            best_test_loss = test_loss
+            best_test_epoch = it
+            # print('model saved')
+
+        dt = datetime.now() - t0
+        print(
+            f'Epoch {it+1}/{args.epochs}, Train Loss: {train_loss:.4f}, \
+          Validation Loss: {test_loss:.4f}, Duration: {dt}, Best Val Epoch: {best_test_epoch}'
+        )
+
+    return train_losses, test_losses

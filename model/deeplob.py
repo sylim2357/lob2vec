@@ -1,9 +1,10 @@
+import torch.nn.functional as F
 import torch.nn as nn
 import torch
 
 
 class DeepLob(nn.Module):
-    def __init__(self):
+    def __init__(self, norm=False):
         super().__init__()
 
         # convolution blocks
@@ -105,6 +106,7 @@ class DeepLob(nn.Module):
             input_size=192, hidden_size=64, num_layers=1, batch_first=True
         )
         self.fc1 = nn.Linear(64, 64)
+        self.norm = norm
 
     def forward(self, x):
         # h0: (number of hidden layers, batch size, hidden size)
@@ -128,6 +130,7 @@ class DeepLob(nn.Module):
 
         x = x[:, -1, :]
         x = self.fc1(x)
-        # x = F.normalize(x, dim=1)
+        if self.norm:
+            x = F.normalize(x, dim=1)
 
         return x
