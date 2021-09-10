@@ -75,23 +75,23 @@ class TransLobDataset(LobDataset):
 
     def __getitem__(self, index):
         feat = self.x[index : index + self.T, :].transpose(0, 1).float()
-        mask_idx = torch.rand(self.T * 40).ge(0.8).nonzero().reshape(-1)
-        noise = torch.normal(0, 1, (len(mask_idx),))
-        feat_masked = (
-            feat.view(-1).scatter(0, mask_idx, noise).view(40, self.T)
-        )
+        # mask_idx = torch.rand(self.T * 40).ge(0.8).nonzero().reshape(-1)
+        # noise = torch.normal(0, 1, (len(mask_idx),))
+        # feat_masked = (
+        #     feat.view(-1).scatter(0, mask_idx, noise).view(40, self.T)
+        # )
 
-        # aug1 = torch.cat((feat[:20, :], noise), dim=0)
-        feat_highs = feat[20:, :]
-        feat_highs[::2, :] = torch.normal(0, 1, (10, feat.size(1)))
-        aug2 = torch.cat((feat[:20, :], feat_highs), dim=0)
+        # feat_highs = feat[20:, :]
+        # feat_highs[::2, :] = torch.normal(0, 1, (10, feat.size(1)))
+        # aug2 = torch.cat((feat[:20, :], feat_highs), dim=0)
 
-        x = feat.unsqueeze(dim=0)
+        # x = feat.unsqueeze(dim=0)
 
-        return (
-            torch.stack((feat, feat_masked, aug2), dim=0),
-            self.y[index + self.T - 1],
-        )
+        # return (
+        #     torch.stack((feat, feat_masked, aug2), dim=0),
+        #     self.y[index + self.T - 1],
+        # )
+        return (feat.unsqueeze(0), self.y[index + self.T - 1])
         # return x, self.y[index + self.T - 1]
 
 

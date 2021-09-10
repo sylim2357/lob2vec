@@ -38,7 +38,7 @@ def arg_parse():
         '-d', '--device', default='cuda:0', type=str, help='device'
     )
     args.add_argument(
-        '-b', '--batch-size', default=256, type=int, help='batch size'
+        '-b', '--batch-size', default=2048, type=int, help='batch size'
     )
     args.add_argument(
         '-m',
@@ -50,9 +50,9 @@ def arg_parse():
     args.add_argument(
         '-l',
         '--loss',
-        default='vicandsupcon',
+        default='supconmixup',
         type=str,
-        help='loss scheme: supcon, vic, vicsupcon, vicandsupcon',
+        help='loss scheme: supcon, vic, vicsupcon, vicandsupcon, supconmixup',
     )
     args.add_argument(
         '-lw',
@@ -157,7 +157,8 @@ def pretrain(args):
         'supcon': 'SupConLoss',
         'vic': 'VICLoss',
         'vicsupcon': 'VICSupConLoss',
-        'vicandsupcon': "VICandSupConLoss",
+        'vicandsupcon': 'VICandSupConLoss',
+        'supconmixup': 'SupConMixUpLoss'
     }
 
     tran_lobs, val_lobs = load_data(args)
@@ -185,7 +186,7 @@ def pretrain(args):
     criterion = getattr(losses, criterions.get(args.loss))()
     train_fn = getattr(trainer, args.mode + '_train_function')
     make_batches_fn = None
-    if 'sup' not in args.mode:
+    if 'sup' not in args.loss:
         # make_batches_fn = make_batches.bt_three_way
         make_batches_fn = make_batches.bt_aug1_vs_aug2
     train_losses, val_losses = train_fn(
