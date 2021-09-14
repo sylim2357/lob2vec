@@ -14,7 +14,7 @@ from model.lob2vec import (
     DeepLobPred,
     TransLobPred,
 )
-from utils.optimizers import LARS
+from utils.optimizers import LARS, LARSWrapper
 from utils import trainer, losses, make_batches
 from dataset import dataset
 
@@ -33,12 +33,12 @@ def arg_parse():
     args.add_argument(
         '-dp', '--data-path', default='./data/', type=str, help='path to data'
     )
-    args.add_argument('-e', '--epochs', default=500, type=int, help='epochs')
+    args.add_argument('-e', '--epochs', default=100, type=int, help='epochs')
     args.add_argument(
         '-d', '--device', default='cuda:0', type=str, help='device'
     )
     args.add_argument(
-        '-b', '--batch-size', default=2048, type=int, help='batch size'
+        '-b', '--batch-size', default=4096, type=int, help='batch size'
     )
     args.add_argument(
         '-m',
@@ -50,21 +50,21 @@ def arg_parse():
     args.add_argument(
         '-l',
         '--loss',
-        default='supconmixup',
+        default='vicandsupcon',
         type=str,
         help='loss scheme: supcon, vic, vicsupcon, vicandsupcon, supconmixup',
     )
     args.add_argument(
         '-lw',
         '--lr-weight',
-        default=2.0,
+        default=1e-3,
         type=float,
         help='learning rate for weights',
     )
     args.add_argument(
         '-lb',
         '--lr-bias',
-        default=2.0,
+        default=1e-4,
         type=float,
         help='learning rate for biases',
     )
@@ -157,14 +157,15 @@ def pretrain(args):
         'supcon': 'SupConLoss',
         'vic': 'VICLoss',
         'vicsupcon': 'VICSupConLoss',
-        'vicandsupcon': 'VICandSupConLoss',
-        'supconmixup': 'SupConMixUpLoss'
+        'vicandsupcon': 'VICandSupConMixupLoss',
+        'supconmixup': 'SupConMixUpLoss',
     }
 
     tran_lobs, val_lobs = load_data(args)
     train_loader, val_loader = build_dataset(args, tran_lobs, val_lobs)
     if 'supcon' in args.loss:
         norm = True
+        # norm = False
     else:
         norm = False
     if args.model == 'deeplob':
@@ -180,9 +181,9 @@ def pretrain(args):
         else:
             param_weights.append(param)
     parameters = [{'params': param_weights}, {'params': param_biases}]
-    optimizer = LARS(
-        parameters, 0, weight_decay_filter=True, lars_adaptation_filter=True
-    )  # WORKS
+    optimizer = LARS(parameters, 0)  # WORKS
+    # optimizer = LARS(pretextmodel.parameters(), 100)
+    # optimizer = torch.optim.RMSprop(pretextmodel.parameters(), 1e-5)
     criterion = getattr(losses, criterions.get(args.loss))()
     train_fn = getattr(trainer, args.mode + '_train_function')
     make_batches_fn = None
@@ -241,5 +242,5 @@ if __name__ == '__main__':
     else:
         train_losses, val_losses = train(args)
 
-    with open('./losses.pkl', 'wb'):
-        pickle.dump((train_losses, val_losses))
+    with open('./losses.pkl', 'wb') as f:
+        pickle.dump((train_losses, val_losses), f)

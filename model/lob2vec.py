@@ -10,9 +10,9 @@ class DeepLobPreText(nn.Module):
     def __init__(self, deeplob=None, norm=False):
         super().__init__()
         if deeplob:
-            self.deeplob = deeplob
+            self.enc = deeplob
         else:
-            self.deeplob = DeepLob(norm=norm)
+            self.enc = DeepLob(norm=norm)
         self.norm = norm
         self.gelu = nn.GELU()
         # self.proj = nn.Linear(64, 128)
@@ -25,7 +25,7 @@ class DeepLobPreText(nn.Module):
         )
 
     def forward(self, x):
-        x = self.deeplob(x)
+        x = self.enc(x)
         x = self.gelu(x)
         x = self.proj(x)
         if self.norm:
@@ -64,13 +64,12 @@ class TransLobPreText(nn.Module):
 
         self.norm = norm
         self.gelu = nn.GELU()
-        norm = nn.LayerNorm(512)
         self.proj = nn.Sequential(
             nn.Linear(128, 512),
-            norm,
+            nn.LayerNorm(512, eps=1e-04),
             nn.GELU(),
             nn.Linear(512, 512),
-            norm,
+            nn.LayerNorm(512, eps=1e-04),
             nn.GELU(),
             nn.Linear(512, 512),
         )

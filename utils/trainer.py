@@ -3,6 +3,7 @@ from datetime import datetime
 from tqdm import tqdm
 import torch
 import math
+import gc
 
 
 def pretext_train_function(
@@ -41,7 +42,6 @@ def pretext_train_function(
                 args.lr_weight,
                 args.lr_bias,
             )
-
             optimizer.zero_grad()
             x = inp.view(batch_size * n_views, *(inp.size()[2:]))
             z = model(x).reshape(batch_size, n_views, -1)
@@ -66,16 +66,27 @@ def pretext_train_function(
                 else:
                     printbool = False
                 loss = criterion(z1, z2, print_c=printbool)
-
+            if printbool:
+                a = []
+                for name, param in model.named_parameters():
+                    a.append(param.mean().item())
+                print('weight before')
+                print(np.mean(a))
             loss.backward()
             optimizer.step()
+            if printbool:
+                a = []
+                for param in model.parameters():
+                    a.append(param.mean().item())
+                print('weight after')
+                print(np.mean(a))
 
             if idx % 100 == 0:
                 print(f'{idx} update: {loss.item()}')
             train_loss.append(loss.item())
         # Get train loss and test loss
         train_loss = np.mean(train_loss)  # a little misleading
-
+        gc.collect()
         model.eval()
         test_loss = []
         for t_idx, (inputs, targets) in enumerate(test_loader):
