@@ -33,12 +33,12 @@ def arg_parse():
     args.add_argument(
         '-dp', '--data-path', default='./data/', type=str, help='path to data'
     )
-    args.add_argument('-e', '--epochs', default=100, type=int, help='epochs')
+    args.add_argument('-e', '--epochs', default=400, type=int, help='epochs')
     args.add_argument(
         '-d', '--device', default='cuda:0', type=str, help='device'
     )
     args.add_argument(
-        '-b', '--batch-size', default=4096, type=int, help='batch size'
+        '-b', '--batch-size', default=1024, type=int, help='batch size'
     )
     args.add_argument(
         '-m',
@@ -50,28 +50,28 @@ def arg_parse():
     args.add_argument(
         '-l',
         '--loss',
-        default='vicandsupcon',
+        default='vicandsupconmixup',
         type=str,
-        help='loss scheme: supcon, vic, vicsupcon, vicandsupcon, supconmixup',
+        help='loss scheme: supcon, vic, vicsupcon, vicandsupconmixup, supconmixup',
     )
     args.add_argument(
         '-lw',
         '--lr-weight',
-        default=1e-3,
+        default=1.0,
         type=float,
         help='learning rate for weights',
     )
     args.add_argument(
         '-lb',
         '--lr-bias',
-        default=1e-4,
+        default=0.5,
         type=float,
         help='learning rate for biases',
     )
     args.add_argument(
         '-ld',
         '--lr-downstream',
-        default=1e-4,
+        default=1e-3,
         type=float,
         help='learning rate for downstream',
     )
@@ -156,8 +156,8 @@ def pretrain(args):
     criterions = {
         'supcon': 'SupConLoss',
         'vic': 'VICLoss',
-        'vicsupcon': 'VICSupConLoss',
-        'vicandsupcon': 'VICandSupConMixupLoss',
+        'vicsup': 'VICSupLoss',
+        'vicandsupconmixup': 'VICandSupConMixupLoss',
         'supconmixup': 'SupConMixUpLoss',
     }
 
@@ -212,7 +212,7 @@ def train(args):
         norm = True
     else:
         norm = False
-    enc = torch.load(args.model_path).enc
+    enc = torch.load(args.model_path + '_' + args.loss).enc
     if args.model == 'deeplob':
         predmodel = DeepLobPred(enc=enc, norm=norm).to(device)
     else:

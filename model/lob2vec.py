@@ -65,13 +65,13 @@ class TransLobPreText(nn.Module):
         self.norm = norm
         self.gelu = nn.GELU()
         self.proj = nn.Sequential(
-            nn.Linear(128, 512),
-            nn.LayerNorm(512, eps=1e-04),
+            nn.Linear(256, 1024),
+            nn.LayerNorm(1024, eps=1e-05),
             nn.GELU(),
-            nn.Linear(512, 512),
-            nn.LayerNorm(512, eps=1e-04),
+            nn.Linear(1024, 1024),
+            nn.LayerNorm(1024, eps=1e-05),
             nn.GELU(),
-            nn.Linear(512, 512),
+            nn.Linear(1024, 1024),
         )
 
     def forward(self, x):
@@ -93,7 +93,7 @@ class TransLobPred(nn.Module):
             self.enc = TransLobEncoder(norm=norm)
 
         self.gelu = nn.GELU()
-        self.fc = nn.Linear(128, 3)
+        self.fc = nn.Linear(256, 3)
 
     def forward(self, x):
         with torch.no_grad():

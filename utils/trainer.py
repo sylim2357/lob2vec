@@ -67,6 +67,9 @@ def pretext_train_function(
                     printbool = False
                 loss = criterion(z1, z2, print_c=printbool)
             if printbool:
+                if idx % 200:
+                    print('z1')
+                    print(z.squeeze())
                 a = []
                 for name, param in model.named_parameters():
                     a.append(param.mean().item())
@@ -125,7 +128,7 @@ def pretext_train_function(
         test_losses[it] = test_loss
 
         if test_loss < best_test_loss:
-            torch.save(model, args.model_path)
+            torch.save(model, args.model_path + '_' + args.loss)
             best_test_loss = test_loss
             best_test_epoch = it
             print('model saved')

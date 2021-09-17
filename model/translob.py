@@ -19,11 +19,11 @@ class TransLobEncoder(nn.Module):
         else:
             self.extractor = FeatureExtractor(
                 [
-                    (14, 2, 1, 1),
-                    (14, 2, 1, 2),
-                    (14, 2, 1, 4),
-                    (14, 2, 1, 8),
-                    (14, 2, 1, 16),
+                    (63, 4, 1, 1),
+                    (63, 4, 1, 2),
+                    (63, 4, 1, 4),
+                    (63, 4, 1, 8),
+                    (63, 4, 1, 16),
                 ],
                 40,
                 0.1,
@@ -37,20 +37,20 @@ class TransLobEncoder(nn.Module):
             self.aggregator = aggregator
         else:
             self.aggregator = TransformerAggregator(
-                d_model=64,
+                d_model=256,
                 n_head=4,
                 n_encoder_layers=2,
-                dim_feedforward=256,
+                dim_feedforward=1024,
                 dropout=0.1,
                 activation='relu',
                 tr_weight_share=True,
             )
         self.norm = norm
 
-        self.fc = nn.Linear(15, 64)
+        self.fc = nn.Linear(64, 256)
 
-        self.layernorm = nn.LayerNorm([14, 100])
-        self.fc1 = nn.Linear(100 * 64, 128)
+        self.layernorm = nn.LayerNorm([63, 100])
+        self.fc1 = nn.Linear(100 * 256, 256)
 
     def forward(self, x):
         x = self.extractor(x)
@@ -132,7 +132,8 @@ class TransformerAggregator(Module):
         src_mask = _generate_square_subsequent_mask(qlen).to(
             torch.device(src.device)
         )
-        encoding = self.encoder(src, mask=src_mask)
+        # encoding = self.encoder(src, mask=src_mask)
+        encoding = self.encoder(src)
 
         return encoding
 

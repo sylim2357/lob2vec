@@ -342,17 +342,26 @@ class VICandSupConMixupLoss(nn.Module):
             if len(l) > 0:
                 z1 = features[l]
                 z1 = z1.reshape((len(l) * n_views, -1))
-                z2_idx = torch.randperm(z1.size(0))
+                z2_idx = torch.randperm(len(l))
                 z2 = z1[z2_idx]
-                lam = torch.rand(1).to(device) * 0.01 + 0.99
+                lam = torch.rand(1).to(device) * 0.1 + 0.9
                 z_mixup1 = lam * z1 + (1 - lam) * z2
+                z_mixup2 = lam * z2 + (1 - lam) * z1
 
-                lam = torch.rand(1).to(device) * 0.01 + 0.99
-                z3_idx = torch.randperm(z2.size(0))
-                z3 = z2[z3_idx]
-                z_mixup2 = lam * z1 + (1 - lam) * z3
+                lam = torch.rand(1).to(device) * 0.1 + 0.9
+                z3_idx = torch.randperm(len(l))
+                z3 = z1[z3_idx]
+                z4_idx = torch.randperm(len(l))
+                z4 = z1[z4_idx]
+                z_mixup3 = lam * z3 + (1 - lam) * z4
+                z_mixup4 = lam * z4 + (1 - lam) * z3
 
-                z_list.append(torch.stack((z_mixup1, z_mixup2), dim=1))
+                z_list.append(
+                    torch.stack(
+                        (z_mixup1, z_mixup2, z_mixup3, z_mixup4), dim=1
+                    )
+                )
+
         z = torch.cat(z_list, dim=0)
         # loss1 = self.vic(z[:,0,::].squeeze(), z[:,1,::].squeeze(),print_c=print_c)
         mask = torch.eq(labels, labels.T).float().to(device)  # be careful
@@ -371,10 +380,10 @@ class VICandSupConMixupLoss(nn.Module):
         anchor_dot_contrast = torch.div(
             torch.matmul(anchor_feature, contrast_feature.T), self.temperature
         )
-        # for numerical stability
+
         logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
         logits = anchor_dot_contrast - logits_max.detach()
-
+        # logits = anchor_dot_contrast
         # tile mask
         mask = mask.repeat(anchor_count, contrast_count)
         # mask-out self-contrast cases
@@ -388,14 +397,13 @@ class VICandSupConMixupLoss(nn.Module):
 
         # compute log_prob
         exp_logits = torch.exp(logits) * logits_mask
-        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))
-
+        log_prob = logits - 10*torch.log(exp_logits.sum(1, keepdim=True))
         # compute mean of log-likelihood over positive
         mean_log_prob_pos = (mask * log_prob).sum(1) / mask.sum(1)
-
         # loss
-        loss = -(self.temperature / self.base_temperature) * mean_log_prob_pos
-        loss = loss.view(anchor_count, batch_size).mean()
+        loss = - (self.temperature / self.base_temperature) * mean_log_prob_pos
+        # loss = loss.view(anchor_count, batch_size).mean()
+        loss = loss.mean()
         # if print_c:
         #     print(f'supcon loss is {loss}')
 
@@ -482,8 +490,8 @@ class VICLoss(nn.Module):
         z1: torch.Tensor,
         z2: torch.Tensor,
         sim_loss_weight: float = 25.0,
-        var_loss_weight: float = 25.0,
-        cov_loss_weight: float = 1.0,
+        var_loss_weight: float = 10.0,
+        cov_loss_weight: float = 10.0,
     ) -> torch.Tensor:
         """Computes VICReg's loss given batch of projected features z1 from view 1 and
         projected features z2 from view 2.
@@ -535,9 +543,9 @@ class BTLoss(nn.Module):
         return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
 
-class VICSupConLoss(VICLoss):
+class VICSupLoss(VICLoss):
     def __init__(self, num_classes=3):
-        super(VICSupConLoss, self).__init__()
+        super(VICSupLoss, self).__init__()
         self.num_classes = num_classes
 
     def forward(self, features, labels=None, print_c=False):
@@ -565,28 +573,49 @@ class VICSupConLoss(VICLoss):
             (batch_size * n_views, -1)
         )
 
-        y_list = []
+        # y_list = []
+        z1_list = []
+        z2_list = []
 
         for l in label_idxs:
-            z1 = features[l]
-            z1 = z1.reshape((len(l) * n_views, -1))
-            z2_idx = torch.randperm(z1.size(0))
-            z2 = z1[z2_idx]
-            y_list.append(z2)
+            if len(l) > 0:
+                z1 = features[l]
+                z1 = z1.reshape((len(l) * n_views, -1))
+                z2_idx = torch.randperm(z1.size(0))
+                z2 = z1[z2_idx]
+                lam = torch.rand(1).to(device) * 0.2 + 0.8
+                z_mixup1 = lam * z1 + (1 - lam) * z2
 
-        contrast_feature_2 = torch.cat(y_list, dim=0)
-        lam = (
-            torch.distributions.beta.Beta(1, 1)
-            .sample((contrast_feature_2.size(0), 1))
-            .to(device)
-        )
-        z1_interpolate = (
-            lam * contrast_feature + (1 - lam) * contrast_feature_2
-        )
-        z2_interpolate = (
-            lam * contrast_feature_2 + (1 - lam) * contrast_feature
-        )
-        loss, c = self.vicreg_loss_func(z1_interpolate, z2_interpolate)
+                lam = torch.rand(1).to(device) * 0.2 + 0.8
+                z3_idx = torch.randperm(z2.size(0))
+                z3 = z2[z3_idx]
+                z_mixup2 = lam * z1 + (1 - lam) * z3
+                z1_list.append(z_mixup1)
+                z2_list.append(z_mixup2)
+
+            # z1_list.append(z_mixup1)
+            # z2_list.append(z_mixup2)
+            # z1 = features[l]
+            # z1 = z1.reshape((len(l) * n_views, -1))
+            # z2_idx = torch.randperm(z1.size(0))
+            # z2 = z1[z2_idx]
+            # y_list.append(z2)
+
+        # contrast_feature_2 = torch.cat(y_list, dim=0)
+        z1 = torch.cat(z1_list, dim=0)
+        z2 = torch.cat(z2_list, dim=0)
+        # lam = (
+        #     torch.distributions.beta.Beta(1, 1)
+        #     .sample((contrast_feature_2.size(0), 1))
+        #     .to(device)
+        # )
+        # z1_interpolate = (
+        #     lam * contrast_feature + (1 - lam) * contrast_feature_2
+        # )
+        # z2_interpolate = (
+        #     lam * contrast_feature_2 + (1 - lam) * contrast_feature
+        # )
+        loss, c = self.vicreg_loss_func(z1, z2)
 
         if print_c:
             print(c)
