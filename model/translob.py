@@ -19,11 +19,19 @@ class TransLobEncoder(nn.Module):
         else:
             self.extractor = FeatureExtractor(
                 [
+<<<<<<< HEAD
                     (127, 4, 1, 2),
                     (127, 4, 1, 2),
                     (127, 4, 1, 2),
                     (127, 4, 1, 2),
                     (127, 4, 1, 2),
+=======
+                    (63, 4, 1, 1),
+                    (63, 4, 1, 2),
+                    (63, 4, 1, 4),
+                    (63, 4, 1, 8),
+                    (63, 4, 1, 16),
+>>>>>>> 7eca5ce148d9f3a24a371d22cf2044f5100ec305
                 ],
                 40,
                 0.1,
@@ -37,12 +45,21 @@ class TransLobEncoder(nn.Module):
             self.aggregator = aggregator
         else:
             self.aggregator = TransformerAggregator(
+<<<<<<< HEAD
                 d_model=128,
                 n_head=8,
                 n_encoder_layers=8,
                 dim_feedforward=512,
                 dropout=0.3,
                 activation='gelu',
+=======
+                d_model=256,
+                n_head=4,
+                n_encoder_layers=2,
+                dim_feedforward=1024,
+                dropout=0.1,
+                activation='relu',
+>>>>>>> 7eca5ce148d9f3a24a371d22cf2044f5100ec305
                 tr_weight_share=True,
             )
         self.norm = norm

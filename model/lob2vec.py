@@ -80,7 +80,7 @@ class TransLobPreText(nn.Module):
             nn.Linear(512, 512),
             nn.LayerNorm(512, eps=1e-05),
             nn.GELU(),
-            nn.Linear(512, 512),
+            nn.Linear(1024, 1024),
         )
 
     def forward(self, x):

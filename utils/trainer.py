@@ -80,6 +80,9 @@ def pretext_train_function(
                     printbool = False
                 loss = criterion(z1, z2, print_c=printbool)
             if printbool:
+                if idx % 200:
+                    print('z1')
+                    print(z.squeeze())
                 a = []
                 for name, param in model.named_parameters():
                     a.append(param.mean().item())
