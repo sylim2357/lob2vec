@@ -23,10 +23,15 @@ class DeepLobPreText(nn.Module):
             nn.GELU(),
             nn.Linear(256, 256),
         )
+        # self.proj = nn.Sequential(
+        #     nn.Linear(64, 64),
+        #     nn.GELU(),
+        #     nn.Linear(64, 64),
+        # )
 
     def forward(self, x):
         x = self.enc(x)
-        x = self.gelu(x)
+        # x = self.gelu(x)
         x = self.proj(x)
         if self.norm:
             x = F.normalize(x, dim=1)
@@ -42,11 +47,15 @@ class DeepLobPred(nn.Module):
         else:
             self.deeplob = DeepLob(norm=norm)
         self.gelu = nn.GELU()
-        self.fc = nn.Linear(256, 3)
+        self.fc = nn.Sequential(
+            nn.Linear(64, 64),
+            nn.Linear(64, 3)
+        )
+        # self.fc = nn.Linear(64, 3)
 
     def forward(self, x):
-        with torch.no_grad():
-            x = self.deeplob(x)
+        # with torch.no_grad():
+        x = self.deeplob(x)
         x = self.gelu(x)
         x = self.fc(x)
         pred = torch.softmax(x, dim=1)
@@ -65,11 +74,11 @@ class TransLobPreText(nn.Module):
         self.norm = norm
         self.gelu = nn.GELU()
         self.proj = nn.Sequential(
-            nn.Linear(128, 512),
-            nn.LayerNorm(512, eps=1e-04),
+            nn.Linear(512, 512),
+            nn.LayerNorm(512, eps=1e-05),
             nn.GELU(),
             nn.Linear(512, 512),
-            nn.LayerNorm(512, eps=1e-04),
+            nn.LayerNorm(512, eps=1e-05),
             nn.GELU(),
             nn.Linear(512, 512),
         )
@@ -93,7 +102,7 @@ class TransLobPred(nn.Module):
             self.enc = TransLobEncoder(norm=norm)
 
         self.gelu = nn.GELU()
-        self.fc = nn.Linear(128, 3)
+        self.fc = nn.Linear(512, 3)
 
     def forward(self, x):
         with torch.no_grad():

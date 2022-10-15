@@ -19,11 +19,11 @@ class TransLobEncoder(nn.Module):
         else:
             self.extractor = FeatureExtractor(
                 [
-                    (14, 2, 1, 1),
-                    (14, 2, 1, 2),
-                    (14, 2, 1, 4),
-                    (14, 2, 1, 8),
-                    (14, 2, 1, 16),
+                    (127, 4, 1, 2),
+                    (127, 4, 1, 2),
+                    (127, 4, 1, 2),
+                    (127, 4, 1, 2),
+                    (127, 4, 1, 2),
                 ],
                 40,
                 0.1,
@@ -37,20 +37,20 @@ class TransLobEncoder(nn.Module):
             self.aggregator = aggregator
         else:
             self.aggregator = TransformerAggregator(
-                d_model=64,
-                n_head=4,
-                n_encoder_layers=2,
-                dim_feedforward=256,
-                dropout=0.1,
-                activation='relu',
+                d_model=128,
+                n_head=8,
+                n_encoder_layers=8,
+                dim_feedforward=512,
+                dropout=0.3,
+                activation='gelu',
                 tr_weight_share=True,
             )
         self.norm = norm
 
-        self.fc = nn.Linear(15, 64)
+        self.fc = nn.Linear(128, 128)
 
-        self.layernorm = nn.LayerNorm([14, 100])
-        self.fc1 = nn.Linear(100 * 64, 128)
+        self.layernorm = nn.LayerNorm([127, 100])
+        self.fc1 = nn.Linear(100 * 128, 512)
 
     def forward(self, x):
         x = self.extractor(x)
@@ -82,8 +82,8 @@ class TransformerAggregator(Module):
 
     def __init__(
         self,
-        d_model: int = 5,
-        n_head: int = 3,
+        d_model: int = 8,
+        n_head: int = 8,
         n_encoder_layers: int = 2,
         dim_feedforward: int = 60,
         clamp_len: int = -1,
@@ -129,10 +129,11 @@ class TransformerAggregator(Module):
 
         ## positional encodings
         qlen = src.size(1)
-        src_mask = _generate_square_subsequent_mask(qlen).to(
-            torch.device(src.device)
-        )
-        encoding = self.encoder(src, mask=src_mask)
+        # src_mask = _generate_square_subsequent_mask(qlen).to(
+        #     torch.device(src.device)
+        # )
+        # encoding = self.encoder(src, mask=src_mask)
+        encoding = self.encoder(src)
 
         return encoding
 

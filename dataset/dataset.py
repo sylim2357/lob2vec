@@ -53,20 +53,26 @@ class DeepLobDataset(LobDataset):
 
     def __getitem__(self, index):
         feat = self.x[index : index + self.T, :].float()
-        noise = torch.normal(0, 1, (feat.size(0), 20))
-        aug1 = torch.cat((feat[:, :20], noise), dim=1)
-
-        feat_highs = feat[:, 20:]
-        feat_highs[:, ::2] = torch.normal(0, 1, (feat.size(0), 10))
-        aug2 = torch.cat((feat[:, :20], feat_highs), dim=1)
-
-        return (
-            torch.stack(
-                (feat.unsqueeze(0), aug1.unsqueeze(0), aug2.unsqueeze(0)),
-                dim=0,
-            ),
-            self.y[index + self.T - 1],
-        )
+        feat1idx, _ = torch.randperm(len(feat))[:100].sort()
+        feat2idx, _ = torch.randperm(len(feat))[:100].sort()
+        feat1 = feat[feat1idx]
+        feat2 = feat[feat2idx]
+        # noise = torch.normal(0, 1, (feat.size(0), 20))
+        # aug1 = torch.cat((feat[:, :20], noise), dim=1)
+        #
+        # feat_highs = feat[:, 20:]
+        # feat_highs[:, ::2] = torch.normal(0, 1, (feat.size(0), 10))
+        # aug2 = torch.cat((feat[:, :20], feat_highs), dim=1)
+        #
+        # return (
+        #     torch.stack(
+        #         (feat.unsqueeze(0), aug1.unsqueeze(0), aug2.unsqueeze(0)),
+        #         dim=0,
+        #     ),
+        #     self.y[index + self.T - 1],
+        # )
+        return (feat1.unsqueeze(0), feat2.unsqueeze(0)), self.y[index+self.T-1]
+        # return feat.unsqueeze(0).unsqueeze(0), self.y[index+self.T-1]
 
 
 class TransLobDataset(LobDataset):
@@ -102,7 +108,7 @@ class DownstreamDeepLobDataset(LobDataset):
     def __getitem__(self, index):
         feat = self.x[index : index + self.T, :].float()
 
-        return feat, self.y[index + self.T - 1]
+        return feat.unsqueeze(0), self.y[index + self.T - 1]
 
 
 class DownstreamTransLobDataset(LobDataset):
